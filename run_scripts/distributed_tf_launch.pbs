@@ -1,0 +1,163 @@
+#!/bin/bash
+
+### set the number of processing elements (PEs) or cores
+### set the number of PEs per node
+#PBS -l nodes=2:ppn=1:xk
+### set the wallclock time
+#PBS -l walltime=00:15:00
+### set the job name
+#PBS -N distributed_tf_launch
+### set the job stdout and stderr
+#PBS -e ${PBS_JOBID}.log.err
+#PBS -o ${PBS_JOBID}.log.out
+### set email notification
+#PBS -m bea
+##PBS -M nowhere@illinois.edu
+### In case of multiple allocations, select which one to charge
+##PBS -A xyz
+
+# NOTE: lines that begin with "#PBS" are not interpreted by the shell but ARE 
+# used by the batch system, wheras lines that begin with multiple # signs, 
+# like "##PBS" are considered "commented out" by the batch system 
+# and have no effect.  
+
+# If you launched the job in a directory prepared for the job to run within, 
+# you'll want to cd to that directory
+# [uncomment the following line to enable this]
+# cd $PBS_O_WORKDIR
+
+# Alternatively, the job script can create its own job-ID-unique directory 
+# to run within.  In that case you'll need to create and populate that 
+# directory with executables and perhaps inputs
+# [uncomment and customize the following lines to enable this behavior] 
+# mkdir -p /scratch/sciteam/$USER/$PBS_JOBID
+# cd /scratch/sciteam/$USER/$PBS_JOBID
+# cp /scratch/job/setup/directory/* .
+
+# To add certain modules that you do not have added via ~/.modules 
+#. /opt/modules/default/init/bash
+#module load craype-hugepages2M  perftools
+
+### launch the application
+### redirecting stdin and stdout if needed
+### NOTE: (the "in" file must exist for input)
+
+DATA_DIR="/u/staff/saxton/scratch/ImageNet/2012"
+CMD_LOC="/mnt/a/u/staff/saxton/Development/TensorFlowModels_Sept_2017/benchmarks/scripts/tf_cnn_benchmarks/"
+SNAP_DIR=${PBS_O_WORKDIR}/snap_${PBS_JOBNAME}_${PBS_NUM_NODES}
+
+rm -rf $SNAP_DIR
+
+PY_CMD="tf_cnn_benchmarks.py"
+NUM_PS_HOSTS=1
+
+PYTHON_EX=python
+
+TENSORFLOW_SCRIPT="$CMD_LOC/$PY_CMD"
+
+TENSORFLOW_ARGS="--batch_size 16 \
+--model inception3 \
+--data_name imagenet \
+--train_dir ${SNAP_DIR} \
+--data_dir ${DATA_DIR}/train \
+--variable_update distributed_replicated"
+
+
+HOST_NAMES=$(aprun -q -n ${PBS_NUM_NODES} -N ${PBS_NUM_PPN} -- hostname)
+
+let PS_HOST_COUNT=0
+let WORKER_HOST_COUNT=0
+
+PS_HOSTS_TASKS=""
+WORKER_HOSTS_TASKS=""
+
+for hn in $HOST_NAMES
+do
+    if [ $PS_HOST_COUNT -lt $NUM_PS_HOSTS ]
+    then
+	PS_HOSTS_TASKS="${hn}:$PS_HOST_COUNT,${PS_HOSTS_TASKS}" # , and : are delimiters
+	let PS_HOST_COUNT++
+    else
+	WORKER_HOSTS_TASKS="${hn}:${WORKER_HOST_COUNT},${WORKER_HOSTS_TASKS}" # , and : are delimiters
+	let WORKER_HOST_COUNT++
+    fi
+done
+
+WORKER_HOSTS_TASKS=$(echo $WORKER_HOSTS_TASKS | sed 's/,$//')
+PS_HOSTS_TASKS=$(echo $PS_HOSTS_TASKS | sed 's/,$//')
+
+
+RUN_CMD=${PBS_O_WORKDIR}/distributed_tf_run_for_jobid_${PBS_JOBID}.sh
+
+RUN_ARGUMENTS="${WORKER_HOSTS_TASKS} ${PS_HOSTS_TASKS}"
+
+cat <<EOF >$RUN_CMD
+#!/bin/bash
+WORKER_HOSTS_TASKS=\${1}
+PS_HOSTS_TASKS=\${2}
+
+MY_HOST_NAME=\$(hostname)
+
+WORKER_HOSTS=""
+PS_HOSTS=""
+
+WHAT_AM_I=""
+MY_TASK_NUMBER=""
+
+for h in \$(echo \$WORKER_HOSTS_TASKS | sed "s/,/ /g")
+do
+    HOST_NAME=\$(echo \$h | cut -d ':' -f 1)
+    WORKER_HOSTS="\${HOST_NAME}:2222,\${WORKER_HOSTS}"
+    if [ \${HOST_NAME} == \${MY_HOST_NAME} ]
+    then
+	WHAT_AM_I='worker'
+	MY_TASK_NUMBER=\$(echo \$h | cut -d ':' -f 2)
+    fi
+done
+
+for h in \$(echo \$PS_HOSTS_TASKS | sed "s/,/ /g")
+do
+    HOST_NAME=\$(echo \$h | cut -d ':' -f 1)
+    PS_HOSTS="\${HOST_NAME}:2222,\${PS_HOSTS}"
+    if [ \${HOST_NAME} == \${MY_HOST_NAME} ]
+    then
+	WHAT_AM_I='ps'
+	MY_TASK_NUMBER=\$(echo \$h | cut -d ':' -f 2)
+    fi
+done
+
+WORKER_HOSTS=\$(echo \$WORKER_HOSTS | sed 's/,\$//')
+PS_HOSTS=\$(echo \$PS_HOSTS | sed 's/,\$//')
+
+PY_CMD="${TENSORFLOW_SCRIPT} \\
+${TENSORFLOW_ARGS} \\
+--ps_hosts \${PS_HOSTS} \\
+--worker_hosts \${WORKER_HOSTS} \\
+--job_name \${WHAT_AM_I} \\
+--task_index \${MY_TASK_NUMBER}"
+
+echo "I am \${MY_HOST_NAME}, my job is \${WHAT_AM_I} with task id \${MY_TASK_NUMBER}. Im about to run
+$PYTHON_EX \${PY_CMD}"
+
+$PYTHON_EX \$PY_CMD
+EOF
+
+chmod u=rwx $RUN_CMD
+
+module unload tensorflow
+module unload bwpy
+module load bwpy/0.3.0
+module load tensorflow/1.0.0
+
+if [ -z $TF_OUT_NAME ]
+then
+TF_OUT_NAME=$PBS_JOBNAME
+fi
+
+
+
+aprun -n ${PBS_NUM_NODES} -N ${PBS_NUM_PPN} -cc none -b -- $RUN_CMD $RUN_ARGUMENTS \
+    1> ${PBS_O_WORKDIR}/${PBS_JOBNAME}.tf.out \
+    2> ${PBS_O_WORKDIR}/${PBS_JOBNAME}.tf.err
+
+rm $RUN_CMD
