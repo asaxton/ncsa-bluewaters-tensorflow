@@ -1,0 +1,105 @@
+#!/bin/bash
+
+### set the number of processing elements (PEs) or cores
+### set the number of PEs per node
+##PBS -l nodes=${NODES}:ppn=${XK_PE}:xk
+#PBS -l nodes=16:ppn=1:xk
+### set the wallclock time
+#PBS -l walltime=08:00:00
+### set the job name
+#PBS -N ConvertImageNetToTF
+### set the job stdout and stderr
+#PBS -e $PBS_JOBID.err
+#PBS -o $PBS_JOBID.out
+### set email notification
+#PBS -m bea
+#PBS -M saxton@illinois.edu
+### In case of multiple allocations, select which one to charge
+##PBS -A xyz
+
+# NOTE: lines that begin with "#PBS" are not interpreted by the shell but ARE 
+# used by the batch system, wheras lines that begin with multiple # signs, 
+# like "##PBS" are considered "commented out" by the batch system 
+# and have no effect.  
+
+# If you launched the job in a directory prepared for the job to run within, 
+# you'll want to cd to that directory
+# [uncomment the following line to enable this]
+# cd $PBS_O_WORKDIR
+
+# Alternatively, the job script can create its own job-ID-unique directory 
+# to run within.  In that case you'll need to create and populate that 
+# directory with executables and perhaps inputs
+# [uncomment and customize the following lines to enable this behavior] 
+# mkdir -p /scratch/sciteam/$USER/$PBS_JOBID
+# cd /scratch/sciteam/$USER/$PBS_JOBID
+# cp /scratch/job/setup/directory/* .
+
+# To add certain modules that you do not have added via ~/.modules 
+#. /opt/modules/default/init/bash
+#module load craype-hugepages2M  perftools
+
+### launch the application
+### redirecting stdin and stdout if needed
+### NOTE: (the "in" file must exist for input)
+
+module load bwpy
+module load tensorflow
+
+DATASETS_PATH="/u/staff/saxton/Development/TensorFlowModels_Sept_2017/models/slim/datasets"
+
+# LABELS_FILE="$DATASETS_PATH/imagenet_2012_validation_synset_labels.txt"
+# LABELS_FILE="$DATASETS_PATH/imagenet_2012_validation_synset_labels_short_test.txt"
+LABELS_FILE="$DATASETS_PATH/imagenet_lsvrc_2015_synsets.txt"
+
+RUN_CMD="python $DATASETS_PATH/build_imagenet_data.py"
+
+
+
+# RUN_ARGUMENTS="--train_directory=/u/staff/saxton/scratch/ImageNet/ILSVRC/synset_grouping/train/ \
+# --validation_directory=/u/staff/saxton/scratch/ImageNet/ILSVRC/synset_grouping/validation/ \
+# --output_directory=$OUTPUT_DIR \
+# --imagenet_metadata_file=$DATASETS_PATH/imagenet_metadata.txt \
+# --labels_file=$LABELS_FILE \
+# --bounding_box_file=/u/staff/saxton/Development/TensorFlowModels_Sept_2017/custom_image-net_files/imagenet_2012_bounding_boxes.csv"
+
+DATA_DIR="/u/staff/saxton/scratch/ImageNet/2012"
+OUTPUT_DIR="/u/staff/saxton/scratch/ImageNet/2012"
+
+RUN_ARGUMENTS="--train_directory=$DATA_DIR/raw-data/train/ \
+--validation_directory=$DATA_DIR/raw-data/validation/ \
+--output_directory=$OUTPUT_DIR \
+--imagenet_metadata_file=$DATASETS_PATH/imagenet_metadata.txt \
+--labels_file=$LABELS_FILE \
+--bounding_box_file=$DATA_DIR/raw-data/imagenet_2012_bounding_boxes.csv \
+--train_shards 1024"
+
+TOT_LENGTH=$(wc -l $LABELS_FILE | cut -d " " -f1)
+NUM_DIV=16
+
+OFFSETS=$(python $DATASETS_PATH/spacing.py $TOT_LENGTH $NUM_DIV)
+
+cd $DATASETS_PATH/status_build_tf_dataset_out
+echo "In directory: $(pwd)"
+
+for i in $OFFSETS
+do
+ index=$(echo $i | cut -d "," -f1)
+ s1=$(echo $i | cut -d "," -f2)
+ s2=$(echo $i | cut -d "," -f3)
+ SPACING_ARG="--num_threads 1 \
+ --offset_start_end $s1 $s2 \
+ --num_proc $NUM_DIV \
+ --proc_index $index"
+
+ RUN="$RUN_CMD $RUN_ARGUMENTS $SPACING_ARG"
+ echo "Doing aprun -b -n 1 -N 1 $RUN > build_tf_in_data_std_out_offset_${index}_${s1}_${s2}...."
+ aprun -b -n 1 -N 1 $RUN \
+ 1> build_tf_in_data_std_out_offset__${index}_${s1}_${s2}.out \
+ 2> build_tf_in_data_std_out_offset__${index}_${s1}_${s2}.err &
+done
+echo "Waiting for apruns to finsh."
+wait
+echo "Done, thank you for flying."
+
+### For more information see the man page for aprun
