@@ -2,12 +2,11 @@
 
 ### set the number of processing elements (PEs) or cores
 ### set the number of PEs per node
-##PBS -l nodes=${NODES}:ppn=${XK_PE}:xk
 #PBS -l nodes=16:ppn=1:xk
 ### set the wallclock time
-#PBS -l walltime=08:00:00
+#PBS -l walltime=02:00:00
 ### set the job name
-#PBS -N ConvertImageNetToTF
+#PBS -N BuildImageNetTFRecords
 ### set the job stdout and stderr
 #PBS -e $PBS_JOBID.err
 #PBS -o $PBS_JOBID.out
@@ -25,7 +24,7 @@
 # If you launched the job in a directory prepared for the job to run within, 
 # you'll want to cd to that directory
 # [uncomment the following line to enable this]
-# cd $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
 
 # Alternatively, the job script can create its own job-ID-unique directory 
 # to run within.  In that case you'll need to create and populate that 
@@ -46,60 +45,95 @@
 module load bwpy
 module load tensorflow
 
-DATASETS_PATH="/u/staff/saxton/Development/TensorFlowModels_Sept_2017/models/slim/datasets"
+echo "Starting"
 
-# LABELS_FILE="$DATASETS_PATH/imagenet_2012_validation_synset_labels.txt"
-# LABELS_FILE="$DATASETS_PATH/imagenet_2012_validation_synset_labels_short_test.txt"
-LABELS_FILE="$DATASETS_PATH/imagenet_lsvrc_2015_synsets.txt"
+RAW_DATA_DIR="/u/staff/saxton/scratch/ImageNet/raw-NCSADataSet/validation"
+DATA_LIST_FILE="validation_files.txt"
+META_DATA_FILE="$PBS_O_WORKDIR/../../models/research/inception/inception/data/imagenet_metadata.txt"
+OUTPUT_DIR="/u/staff/saxton/scratch/ImageNet/tf_records-NCSADataSet/validation"
 
-RUN_CMD="python $DATASETS_PATH/build_imagenet_data.py"
+LOG_DIR="logs/build_imagenet_data_${PBS_JOBID}"
+
+# make sure you qsub this script from the same directoy
+# that build_imagenet_data.pbs is in.
+NUM_DIV=$(cat $PBS_NODEFILE | wc -l)
+
+RUN_CMD="python build_imagenet_data.py"
+RUN_ARGUMENTS="--name validation \
+--data_dir $RAW_DATA_DIR \
+--output_directory $OUTPUT_DIR \
+--imagenet_metadata_file $META_DATA_FILE \
+--data_list_file $DATA_LIST_FILE \
+--shards 128 \
+--proc_tot $NUM_DIV \
+--distributed"
+
+let r=$NUM_DIV-1
+
+TOT_LENGTH=$(wc -l $DATA_LIST_FILE | cut -d " " -f1)
+
+mkdir -p $LOG_DIR
+
+echo "Removing existing output directory and its contents: ${OUTPUT_DIR}"
+rm -rf $OUTPUT_DIR
+mkdir $OUTPUT_DIR
+
+echo "Done, Removing existing output directory and its contents: ${OUTPUT_DIR}"
+
+BB_RUN_SCRIPT=do_bb.sh
+TF_RUN_SCRIPT=do_tf.sh
+
+cat <<EOF>$BB_RUN_SCRIPT
+#!/bin/bash
+
+set -e
+
+index=\$ALPS_APP_PE
+echo "\$index: starting $RUN_SCRIPT"
+
+SPACING_ARG="--proc_index \$index"
+
+RUN_BBOX="$RUN_CMD $RUN_ARGUMENTS \$SPACING_ARG --gen_bbox_store"
+
+echo "Stating BBox">  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
+echo "Stating BBox">  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out
+
+\$RUN_BBOX 1>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out \\
+2>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
+
+EOF
+
+chmod u=rwx $BB_RUN_SCRIPT
+
+echo "Doing aprun -b -n 1 -N 1 $BB_RUN_SCRIPT "
+aprun -b -n 16 -N 1 $BB_RUN_SCRIPT
+
+cat <<EOF>$TF_RUN_SCRIPT
+#!/bin/bash
+
+set -e
+
+index=\$ALPS_APP_PE
+echo "\$index: starting $RUN_SCRIPT"
+
+SPACING_ARG="--proc_index \$index"
+
+echo "Stating tf_record" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
+echo "Stating tf_record" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out
+
+RUN_TF_RECORD="$RUN_CMD $RUN_ARGUMENTS \$SPACING_ARG"
+
+\$RUN_TF_RECORD 1>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out \\
+2>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
+
+EOF
 
 
+chmod u=rwx $TF_RUN_SCRIPT
 
-# RUN_ARGUMENTS="--train_directory=/u/staff/saxton/scratch/ImageNet/ILSVRC/synset_grouping/train/ \
-# --validation_directory=/u/staff/saxton/scratch/ImageNet/ILSVRC/synset_grouping/validation/ \
-# --output_directory=$OUTPUT_DIR \
-# --imagenet_metadata_file=$DATASETS_PATH/imagenet_metadata.txt \
-# --labels_file=$LABELS_FILE \
-# --bounding_box_file=/u/staff/saxton/Development/TensorFlowModels_Sept_2017/custom_image-net_files/imagenet_2012_bounding_boxes.csv"
+echo "Doing aprun -b -n 1 -N 1 $TF_RUN_SCRIPT "
+aprun -b -n 16 -N 1 $TF_RUN_SCRIPT
 
-DATA_DIR="/u/staff/saxton/scratch/ImageNet/2012"
-OUTPUT_DIR="/u/staff/saxton/scratch/ImageNet/2012"
-
-RUN_ARGUMENTS="--train_directory=$DATA_DIR/raw-data/train/ \
---validation_directory=$DATA_DIR/raw-data/validation/ \
---output_directory=$OUTPUT_DIR \
---imagenet_metadata_file=$DATASETS_PATH/imagenet_metadata.txt \
---labels_file=$LABELS_FILE \
---bounding_box_file=$DATA_DIR/raw-data/imagenet_2012_bounding_boxes.csv \
---train_shards 1024"
-
-TOT_LENGTH=$(wc -l $LABELS_FILE | cut -d " " -f1)
-NUM_DIV=16
-
-OFFSETS=$(python $DATASETS_PATH/spacing.py $TOT_LENGTH $NUM_DIV)
-
-cd $DATASETS_PATH/status_build_tf_dataset_out
-echo "In directory: $(pwd)"
-
-for i in $OFFSETS
-do
- index=$(echo $i | cut -d "," -f1)
- s1=$(echo $i | cut -d "," -f2)
- s2=$(echo $i | cut -d "," -f3)
- SPACING_ARG="--num_threads 1 \
- --offset_start_end $s1 $s2 \
- --num_proc $NUM_DIV \
- --proc_index $index"
-
- RUN="$RUN_CMD $RUN_ARGUMENTS $SPACING_ARG"
- echo "Doing aprun -b -n 1 -N 1 $RUN > build_tf_in_data_std_out_offset_${index}_${s1}_${s2}...."
- aprun -b -n 1 -N 1 $RUN \
- 1> build_tf_in_data_std_out_offset__${index}_${s1}_${s2}.out \
- 2> build_tf_in_data_std_out_offset__${index}_${s1}_${s2}.err &
-done
-echo "Waiting for apruns to finsh."
-wait
 echo "Done, thank you for flying."
 
 ### For more information see the man page for aprun
