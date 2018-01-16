@@ -325,7 +325,8 @@ def create_config_proto():
   config.allow_soft_placement = True
   config.intra_op_parallelism_threads = FLAGS.num_intra_threads
   config.inter_op_parallelism_threads = FLAGS.num_inter_threads
-  config.gpu_options.force_gpu_compatible = FLAGS.force_gpu_compatible
+  # asaxton: this option is not suppored.
+  # config.gpu_options.force_gpu_compatible = FLAGS.force_gpu_compatible
   if FLAGS.gpu_memory_frac_for_testing > 0:
     config.gpu_options.per_process_gpu_memory_fraction = (
         FLAGS.gpu_memory_frac_for_testing)

@@ -12,7 +12,7 @@
 #PBS -o $PBS_JOBID.out
 ### set email notification
 #PBS -m bea
-#PBS -M saxton@illinois.edu
+#PBS -M nowhere@illinois.edu
 ### In case of multiple allocations, select which one to charge
 ##PBS -A xyz
 
@@ -46,11 +46,14 @@ module load bwpy
 module load tensorflow
 
 echo "Starting"
+#MODE="training"
+MODE="validation"
 
-RAW_DATA_DIR="/u/staff/saxton/scratch/ImageNet/raw-NCSADataSet/validation"
-DATA_LIST_FILE="validation_files.txt"
+
+RAW_DATA_DIR="${HOME}/scratch/ImageNet/raw-imagenet/$MODE"
+DATA_LIST_FILE="${MODE}_files.txt"
 META_DATA_FILE="$PBS_O_WORKDIR/../../models/research/inception/inception/data/imagenet_metadata.txt"
-OUTPUT_DIR="/u/staff/saxton/scratch/ImageNet/tf_records-NCSADataSet/validation"
+OUTPUT_DIR="${HOME}/scratch/ImageNet/tf_records/${MODE}"
 
 LOG_DIR="logs/build_imagenet_data_${PBS_JOBID}"
 
@@ -59,7 +62,7 @@ LOG_DIR="logs/build_imagenet_data_${PBS_JOBID}"
 NUM_DIV=$(cat $PBS_NODEFILE | wc -l)
 
 RUN_CMD="python build_imagenet_data.py"
-RUN_ARGUMENTS="--name validation \
+RUN_ARGUMENTS="--name ${MODE} \
 --data_dir $RAW_DATA_DIR \
 --output_directory $OUTPUT_DIR \
 --imagenet_metadata_file $META_DATA_FILE \

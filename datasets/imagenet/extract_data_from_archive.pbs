@@ -6,7 +6,7 @@
 ### set the wallclock time
 #PBS -l walltime=08:00:00
 ### set the job name
-#PBS -N ExtracImageNetDataFromArchive
+#PBS -N ExtractImageNetDataFromArchive
 ### set the job stdout and stderr
 #PBS -e $PBS_JOBID.err
 #PBS -o $PBS_JOBID.out
@@ -41,15 +41,22 @@ cd $PBS_O_WORKDIR
 ### redirecting stdin and stdout if needed
 ### NOTE: (the "in" file must exist for input)
 
-IMAGENET_IMAGE_TAR_ARCHIVE=/u/staff/saxton/scratch/ImageNet/fall11_whole.tar
-IMAGENET_ANNOTATION_TAR_ARCHIVE=/u/staff/saxton/scratch/ImageNet/Annotation.tar.gz
+IMAGENET_IMAGE_TAR_ARCHIVE=/sw/unsupported/mldata/ImageNet/Images.tar
+IMAGENET_ANNOTATION_TAR_ARCHIVE=/sw/unsupported/mldata/ImageNet/Annotation.tar.gz
 
-DEST_DIR=/u/staff/saxton/scratch/ImageNet/raw-NCSADataSet/validation
+# keep debuging, training, validation, and  testing data in differnt dir
+# choose which you are doing here
+MODE=validation
 
-FILE_LIST=$PBS_O_WORKDIR/validation_files.txt
+FILE_LIST=$PBS_O_WORKDIR/${DEST_DIR}_files.txt
 
+#FILE_LIST=$PBS_O_WORKDIR/training_files.txt
 #FILE_LIST=$PBS_O_WORKDIR/validation_files.txt
 #FILE_LIST=$PBS_O_WORKDIR/testing_files.txt
+
+mkdir -p ${HOME}/scratch/ImageNet
+mkdir -p ${HOME}/scratch/ImageNet/raw-imagenet
+DEST_DIR=${HOME}/scratch/ImageNet/raw-imagenet/$MODE
 
 IMG_DEST_DIR=$DEST_DIR/Images
 # ANN_DEST_DIR=$DEST_DIR/Annotations
