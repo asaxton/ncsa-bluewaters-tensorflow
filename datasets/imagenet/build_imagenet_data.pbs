@@ -54,6 +54,7 @@ RAW_DATA_DIR="${HOME}/scratch/ImageNet/raw-imagenet/$MODE"
 DATA_LIST_FILE="${MODE}_files.txt"
 META_DATA_FILE="$PBS_O_WORKDIR/../../models/research/inception/inception/data/imagenet_metadata.txt"
 OUTPUT_DIR="${HOME}/scratch/ImageNet/tf_records/${MODE}"
+mkdir -p ${HOME}/scratch/ImageNet/tf_records
 
 LOG_DIR="logs/build_imagenet_data_${PBS_JOBID}"
 
