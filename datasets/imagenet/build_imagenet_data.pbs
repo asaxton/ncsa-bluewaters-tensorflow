@@ -104,6 +104,9 @@ echo "Stating BBox">  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_job
 \$RUN_BBOX 1>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out \\
 2>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
 
+echo "done BBox" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
+echo "done BBox" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out
+
 EOF
 
 chmod u=rwx $BB_RUN_SCRIPT
@@ -129,6 +132,8 @@ RUN_TF_RECORD="$RUN_CMD $RUN_ARGUMENTS \$SPACING_ARG"
 \$RUN_TF_RECORD 1>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out \\
 2>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
 
+echo "done tf_record" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
+echo "done tf_record" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out
 EOF
 
 

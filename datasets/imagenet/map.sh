@@ -47,3 +47,5 @@ echo "Starting $MY_SCRIPT" >> $LOG_DIR/${PBS_JOBNAME}_map_index_${index}_of_${NU
 ./${MY_SCRIPT} $LIST_SLICE 1>> $LOG_DIR/${PBS_JOBNAME}_map_index_${index}_of_${NUM_DIV}_jobid_${PBS_JOBID}.out \
     2>> $LOG_DIR/${PBS_JOBNAME}_map_index_${index}_of_${NUM_DIV}_jobid_${PBS_JOBID}.err
 
+echo "Done $MY_SCRIPT" >> $LOG_DIR/${PBS_JOBNAME}_map_index_${index}_of_${NUM_DIV}_jobid_${PBS_JOBID}.out
+echo "Done $MY_SCRIPT" >> $LOG_DIR/${PBS_JOBNAME}_map_index_${index}_of_${NUM_DIV}_jobid_${PBS_JOBID}.err
