@@ -42,12 +42,11 @@ cd $PBS_O_WORKDIR
 ### redirecting stdin and stdout if needed
 ### NOTE: (the "in" file must exist for input)
 
-module load bwpy
-module load tensorflow
+module load bwpy/0.3.1
 
 echo "Starting"
-#MODE="training"
-MODE="validation"
+MODE="training"
+#MODE="validation"
 
 
 RAW_DATA_DIR="${HOME}/scratch/ImageNet/raw-imagenet/$MODE"
