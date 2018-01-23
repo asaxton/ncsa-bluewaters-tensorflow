@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 ### set the number of processing elements (PEs) or cores
 ### set the number of PEs per node

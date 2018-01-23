@@ -8,8 +8,8 @@
 ### set the job name
 #PBS -N BuildImageNetTFRecords
 ### set the job stdout and stderr
-#PBS -e $PBS_JOBID.err
-#PBS -o $PBS_JOBID.out
+#PBS -e logs/log.${PBS_JOBNAME}_${PBS_JOBID}.err
+#PBS -o logs/log.${PBS_JOBNAME}_${PBS_JOBID}.out
 ### set email notification
 #PBS -m bea
 #PBS -M nowhere@illinois.edu
@@ -98,8 +98,8 @@ SPACING_ARG="--proc_index \$index"
 
 RUN_BBOX="$RUN_CMD $RUN_ARGUMENTS \$SPACING_ARG --gen_bbox_store"
 
-echo "Stating BBox">  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
-echo "Stating BBox">  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out
+echo "Starting BBox">  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
+echo "Starting BBox">  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out
 
 \$RUN_BBOX 1>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out \\
 2>> $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
@@ -111,8 +111,8 @@ EOF
 
 chmod u=rwx $BB_RUN_SCRIPT
 
-echo "Doing aprun -b -n 1 -N 1 $BB_RUN_SCRIPT "
-aprun -b -n 16 -N 1 $BB_RUN_SCRIPT
+echo "Doing aprun -b -n 16 -N 1 -- $BB_RUN_SCRIPT "
+aprun -b -n 16 -N 1 -- $BB_RUN_SCRIPT
 
 cat <<EOF>$TF_RUN_SCRIPT
 #!/bin/bash
@@ -124,8 +124,8 @@ echo "\$index: starting $RUN_SCRIPT"
 
 SPACING_ARG="--proc_index \$index"
 
-echo "Stating tf_record" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
-echo "Stating tf_record" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out
+echo "Starting tf_record" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.err
+echo "Starting tf_record" >>  $LOG_DIR/\${PBS_JOBNAME}_index_\${index}_of_${NUM_DIV}_jobid_\${PBS_JOBID}.out
 
 RUN_TF_RECORD="$RUN_CMD $RUN_ARGUMENTS \$SPACING_ARG"
 
@@ -139,8 +139,8 @@ EOF
 
 chmod u=rwx $TF_RUN_SCRIPT
 
-echo "Doing aprun -b -n 1 -N 1 $TF_RUN_SCRIPT "
-aprun -b -n 16 -N 1 $TF_RUN_SCRIPT
+echo "Doing aprun -b -n 16 -N 1 -- $TF_RUN_SCRIPT "
+aprun -b -n 16 -N 1 -- $TF_RUN_SCRIPT
 
 echo "Done, thank you for flying."
 

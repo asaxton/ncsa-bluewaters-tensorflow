@@ -645,17 +645,17 @@ def _find_image_bounding_boxes(data_dir, data_list_file, proc_tot, proc_index):
     box annotations for the image.
   """
   path_to_bb_xml_util = os.path.join(*[os.path.dirname(os.path.abspath(__file__)),
-                                  '..', '..',
-                                  'models', 'research', 'inception',
-                                  'inception', 'data'])
+                                       '..', '..',
+                                       'models', 'research', 'inception',
+                                       'inception', 'data'])
   sys.path.append(path_to_bb_xml_util)
   from process_bounding_boxes import ProcessXMLAnnotation
-
+  
   ann_data_dir = os.path.join(data_dir, 'Annotation')
 
   with open(data_list_file) as f:
     file_names_synset_pair = [tuple(l.strip().split(' ')) for l in f]
-
+    
   spacing = _spacing(len(file_names_synset_pair), proc_tot)
 
   file_names = [os.path.join(*i) + ".xml" \
@@ -667,11 +667,13 @@ def _find_image_bounding_boxes(data_dir, data_list_file, proc_tot, proc_index):
     print('extracting from %s (%d of %d)' % (f_n, i, len(file_names)))
     xml_filepath_name = os.path.join(*[ann_data_dir, f_n])
     bboxes_from_file = ProcessXMLAnnotation(xml_filepath_name)
-    assert bboxes_from_file is not None, 'No bounding boxes found in ' + f_n
+    if bboxes_from_file is None:
+      raise Exception('No bounding boxes found in ' + f_n)
     bboxes.append([])
     for bbox in bboxes_from_file:
-      assert (bbox.xmin_scaled <= bbox.xmax_scaled or
-              bbox.ymin_scaled <= bbox.ymax_scaled), 'malformed bb in ' + f_n
+      if (bbox.xmin_scaled > bbox.xmax_scaled or
+              bbox.ymin_scaled > bbox.ymax_scaled):
+        raise Exception( 'malformed bb in ' + f_n)
 
       bboxes[-1].append([bbox.xmin_scaled, bbox.ymin_scaled,
                          bbox.xmax_scaled, bbox.ymax_scaled])
@@ -800,11 +802,13 @@ def _build_bounding_box_lookup(bounding_box_file):
 
 def main(unused_argv):
   if FLAGS.gen_bbox_store:
+    print('doing _find_image_bounding_boxes()')
     bboxes = _find_image_bounding_boxes(FLAGS.data_dir,
                                         FLAGS.data_list_file,
                                         FLAGS.proc_tot,
                                         FLAGS.proc_index)
     with open('tmp_bbox_stash_index_{}.pkl'.format(FLAGS.proc_index), 'wb') as f:
+      print('Saving BB store ' + 'tmp_bbox_stash_index_{}.pkl'.format(FLAGS.proc_index))
       pkl.dump(bboxes, f)
   else:
     print('Saving results to %s' % FLAGS.output_directory)

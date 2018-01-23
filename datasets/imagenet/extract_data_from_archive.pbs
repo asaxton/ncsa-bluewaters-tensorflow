@@ -8,8 +8,8 @@
 ### set the job name
 #PBS -N ExtractImageNetDataFromArchive
 ### set the job stdout and stderr
-#PBS -e $PBS_JOBID.err
-#PBS -o $PBS_JOBID.out
+#PBS -e logs/log.${PBS_JOBNAME}_${PBS_JOBID}.err
+#PBS -o logs/log.${PBS_JOBNAME}_${PBS_JOBID}.out
 ### set email notification
 ##PBS -m bea
 ##PBS -M nowhere@illinois.edu
