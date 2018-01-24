@@ -664,7 +664,7 @@ def _find_image_bounding_boxes(data_dir, data_list_file, proc_tot, proc_index):
   bboxes = []
   for i, f_n in enumerate(file_names):
     sys.stdout.flush()
-    print('extracting from %s (%d of %d)' % (f_n, i, len(file_names)))
+    print('extracting bb from %s (%d of %d)' % (f_n, i, len(file_names)))
     xml_filepath_name = os.path.join(*[ann_data_dir, f_n])
     bboxes_from_file = ProcessXMLAnnotation(xml_filepath_name)
     if bboxes_from_file is None:

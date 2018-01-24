@@ -11,8 +11,8 @@
 #PBS -e logs/log.${PBS_JOBNAME}_${PBS_JOBID}.err
 #PBS -o logs/log.${PBS_JOBNAME}_${PBS_JOBID}.out
 ### set email notification
-#PBS -m bea
-#PBS -M nowhere@illinois.edu
+##PBS -m bea
+##PBS -M nowhere@illinois.edu
 ### In case of multiple allocations, select which one to charge
 ##PBS -A xyz
 
@@ -42,7 +42,8 @@ cd $PBS_O_WORKDIR
 ### redirecting stdin and stdout if needed
 ### NOTE: (the "in" file must exist for input)
 
-module load bwpy/0.3.1
+module load bwpy/0.3.0
+module load tensorflow
 
 echo "Starting"
 MODE="training"
