@@ -1,9 +1,16 @@
 #!/bin/bash
+cd $PBS_O_WORKDIR
 
 WORKER_HOSTS_TASKS=${1}
-PS_HOSTS_TASKS=${2}
-DATA_DIR=${3}
-TRAIN_DIR=${4}
+shift
+PS_HOSTS_TASKS=${1}
+shift
+DATA_DIR=${1}
+shift
+TRAIN_DIR=${1}
+shift
+
+CMD_ARGS=${*}
 
 CMD_LOC="../benchmarks/scripts/tf_cnn_benchmarks/"
 
@@ -49,29 +56,13 @@ fi
 WORKER_HOSTS=$(echo $WORKER_HOSTS | sed 's/,$//')
 PS_HOSTS=$(echo $PS_HOSTS | sed 's/,$//')
 
-# parameter_server \
-# --variable_update distributed_replicated \
 
 PY_CMD="${CMD_LOC}/tf_cnn_benchmarks.py \
---batch_size 32 \
---num_warmup_batches 0 \
---num_batches 1000 \
---model inception3 \
---data_name imagenet \
---variable_update parameter_server \
---train_dir ${TRAIN_DIR} \
---eval_dir ${TRAIN_DIR}/eval \
---num_intra_threads 1 \
---num_inter_threads 0 \
 --ps_hosts ${PS_HOSTS} \
 --worker_hosts ${WORKER_HOSTS} \
---data_dir ${DATA_DIR}/train \
 --job_name ${WHAT_AM_I} \
 --task_index ${MY_TASK_NUMBER} \
---force_gpu_compatible"
-
-# --graph_file ${TRAIN_DIR}/def_graph.pb \
-# --sync_on_finish
+${CMD_ARGS}"
 
 echo "I am ${MY_HOST_NAME}, my job is ${WHAT_AM_I} with task id ${MY_TASK_NUMBER}. Im about to run
 python ${PY_CMD}"

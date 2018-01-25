@@ -8,11 +8,11 @@
 ### set the job name
 #PBS -N distributed_tf_launch
 ### set the job stdout and stderr
-#PBS -e log.${PBS_JOBNAME}_${PBS_JOBID}.err
-#PBS -o log.${PBS_JOBNAME}_${PBS_JOBID}.out
+#PBS -e logs/log.${PBS_JOBNAME}_${PBS_JOBID}.err
+#PBS -o logs/log.${PBS_JOBNAME}_${PBS_JOBID}.out
 ### set email notification
-#PBS -m bea
-#PBS -M nowhere@illinois.edu
+##PBS -m bea
+##PBS -M nowhere@illinois.edu
 ### In case of multiple allocations, select which one to charge
 ##PBS -A xyz
 
@@ -24,7 +24,7 @@
 # If you launched the job in a directory prepared for the job to run within, 
 # you'll want to cd to that directory
 # [uncomment the following line to enable this]
-# cd $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
 
 # Alternatively, the job script can create its own job-ID-unique directory 
 # to run within.  In that case you'll need to create and populate that 
@@ -44,11 +44,13 @@
 
 module load bwpy/0.3.1
 
+NUM_BATCHES=100
 DATA_DIR="${HOME}/scratch/ImageNet/tf_records"
-TRAIN_DIR="train_dir_imagenet_testing" # This directory is where the tf graph and checkpoint is saved
-MODE='train'
-#MODE='validation'
+TRAIN_DIR="train_dir" # This directory is where the tf graph and checkpoint is saved
 NUM_PS_HOSTS=1
+
+DO_TRAIN_VAL="--data_dir ${DATA_DIR}/train"
+#DO_TRAIN_VAL="--data_dir ${DATA_DIR}/validation --eval"
 
 HOST_NAMES=$(aprun -q -n ${PBS_NUM_NODES} -N ${PBS_NUM_PPN} -- hostname)
 let PS_HOST_COUNT=0
@@ -73,10 +75,27 @@ WORKER_HOSTS_TASKS=$(echo $WORKER_HOSTS_TASKS | sed 's/,$//')
 PS_HOSTS_TASKS=$(echo $PS_HOSTS_TASKS | sed 's/,$//')
 
 RUN_CMD="${PBS_O_WORKDIR}/dist.sh"
-RUN_ARGUMENTS="${WORKER_HOSTS_TASKS} ${PS_HOSTS_TASKS} ${DATA_DIR} ${TRAIN_DIR}"
+# parameter_server \
+# --variable_update distributed_replicated \
+# --graph_file ${TRAIN_DIR}/def_graph.pb \
+# --sync_on_finish
+
+ADDITIONAL_ARGS="--batch_size 32 \
+--num_warmup_batches 0 \
+--num_batches ${NUM_BATCHES} \
+--model inception3 \
+--data_name imagenet \
+--variable_update parameter_server \
+--train_dir ${TRAIN_DIR} \
+--eval_dir ${TRAIN_DIR}/eval \
+--num_intra_threads 1 \
+--num_inter_threads 0"
+
+RUN_ARGUMENTS="${WORKER_HOSTS_TASKS} ${PS_HOSTS_TASKS} ${DATA_DIR} ${TRAIN_DIR} ${ADDITIONAL_ARGS} ${DO_TRAIN_VAL}" 
+
 echo "Running $RUN_CMD $RUN_ARGUMENTS"
 
-aprun -n ${PBS_NUM_NODES} -N ${PBS_NUM_PPN} -cc none -b -- $RUN_CMD $RUN_ARGUMENTS \
+aprun -b -n ${PBS_NUM_NODES} -N ${PBS_NUM_PPN} -- $RUN_CMD $RUN_ARGUMENTS \
     1> $PBS_O_WORKDIR/logs/${PBS_JOBNAME}_${PBS_JOBID}.out \
     2> $PBS_O_WORKDIR/logs/${PBS_JOBNAME}_${PBS_JOBID}.err
 echo "Done, thank you for flying."
