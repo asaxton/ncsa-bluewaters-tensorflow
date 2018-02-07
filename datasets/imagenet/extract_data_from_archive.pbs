@@ -1,50 +1,19 @@
 #!/bin/bash
 
-### set the number of processing elements (PEs) or cores
-### set the number of PEs per node
 #PBS -l nodes=2:ppn=32:xe
-### set the wallclock time
 #PBS -l walltime=08:00:00
-### set the job name
 #PBS -N ExtractImageNetDataFromArchive
-### set the job stdout and stderr
 #PBS -e logs/log.${PBS_JOBNAME}_${PBS_JOBID}.err
 #PBS -o logs/log.${PBS_JOBNAME}_${PBS_JOBID}.out
-### set email notification
-##PBS -m bea
-##PBS -M nowhere@illinois.edu
-### In case of multiple allocations, select which one to charge
-##PBS -A xyz
 
-# NOTE: lines that begin with "#PBS" are not interpreted by the shell but ARE 
-# used by the batch system, wheras lines that begin with multiple # signs, 
-# like "##PBS" are considered "commented out" by the batch system 
-# and have no effect.  
+## For more options, consult https://bluewaters.ncsa.illinois.edu/batch-jobs
 
-# If you launched the job in a directory prepared for the job to run within, 
-# you'll want to cd to that directory
-# [uncomment the following line to enable this]
 cd $PBS_O_WORKDIR
-# Alternatively, the job script can create its own job-ID-unique directory 
-# to run within.  In that case you'll need to create and populate that 
-# directory with executables and perhaps inputs
-# [uncomment and customize the following lines to enable this behavior] 
-# mkdir -p /scratch/sciteam/$USER/$PBS_JOBID
-# cd /scratch/sciteam/$USER/$PBS_JOBID
-# cp /scratch/job/setup/directory/* .
-
-# To add certain modules that you do not have added via ~/.modules 
-#. /opt/modules/default/init/bash
-#module load craype-hugepages2M  perftools
-
-### launch the application
-### redirecting stdin and stdout if needed
-### NOTE: (the "in" file must exist for input)
 
 IMAGENET_IMAGE_TAR_ARCHIVE=/sw/unsupported/mldata/ImageNet/Images.tar
 IMAGENET_ANNOTATION_TAR_ARCHIVE=/sw/unsupported/mldata/ImageNet/Annotation.tar.gz
 
-# keep debuging, training, validation, and  testing data in differnt dir
+# keep debuging, training, validation, and testing data in differnt directories
 # choose which you are doing here
 MODE=training
 #MODE=validation
@@ -54,13 +23,12 @@ FILE_LIST=$PBS_O_WORKDIR/${MODE}_files.txt
 #FILE_LIST=$PBS_O_WORKDIR/validation_files.txt
 #FILE_LIST=$PBS_O_WORKDIR/testing_files.txt
 
-mkdir -p ${HOME}/scratch/ImageNet
 mkdir -p ${HOME}/scratch/ImageNet/raw-imagenet
 DEST_DIR=${HOME}/scratch/ImageNet/raw-imagenet/$MODE
 
 IMG_DEST_DIR=$DEST_DIR/Images
 # ANN_DEST_DIR=$DEST_DIR/Annotations
-# You might have though it should been the above, but the tarball already has a subdrectory Annotation
+# You might have thought it should've been the above, but the tarball already has a subdrectory Annotation
 ANN_DEST_DIR=$DEST_DIR
 
 echo "Romoveing and creating $DEST_DIR. If there is old data in the directory, it might take a while."
@@ -72,12 +40,9 @@ mkdir -p $ANN_DEST_DIR
 export LOG_DIR="logs/extract_data_from_archive_${PBS_JOBID}"
 
 echo "Starting. You have set the following env var"
-
 echo "IMAGENET_IMAGE_TAR_ARCHIVE=$IMAGENET_IMAGE_TAR_ARCHIVE"
 echo "IMAGENET_ANNOTATION_TAR_ARCHIVE=$IMAGENET_ANNOTATION_TAR_ARCHIVE"
-
 echo "DEST_DIR=$DEST_DIR"
-
 echo "FILE_LIST=$FILE_LIST"
 
 module load bwpy/0.3.1
@@ -95,16 +60,12 @@ IMG_SYNSET_LIST=($(python -c "with open(\"${FILE_LIST}\") as f:
     for i in list(set([l.strip().split(' ')[1].split('_')[0] for l in f])):
         print i"))
 echo "Finished Creating Image Synset list"
-
 let TOT_SYNSET=${#IMG_SYNSET_LIST[@]}
-
 echo "Total Number of Synset $TOT_SYNSET"
-
 echo "Converting Validation Data"
 
 IMAGE_RUN_SCRIPT=extract_images.sh
-
-cat <<EOF>$IMAGE_RUN_SCRIPT
+cat > $IMAGE_RUN_SCRIPT << EOF
 #!/bin/bash
 
 index=\$ALPS_APP_PE
@@ -118,34 +79,29 @@ for syn in \$SYNSET_SLICE
 do
 
 IMAGES_LIST=\$( python -c "with open(\"${FILE_LIST}\") as f:
-    for i in [l.strip().split(\" \")[1] + '.JPEG' for l in f if \"\${syn}\" in l.split()[1] ]: 
+    for i in [l.strip().split(\" \")[1] + '.JPEG' for l in f if \"\${syn}\" in l.split()[1] ]:
         print i" )
 
 echo "\${index}: starting tar -xf ${IMAGENET_IMAGE_TAR_ARCHIVE} --to-stdout \${syn}.tar | tar -x -C ${IMG_DEST_DIR} \${IMAGES_LIST}"
 tar -xf ${IMAGENET_IMAGE_TAR_ARCHIVE} --to-stdout \${syn}.tar | tar -x -C ${IMG_DEST_DIR} \${IMAGES_LIST}
 
 done
-
 EOF
 
 chmod u=rwx $IMAGE_RUN_SCRIPT
-
 echo "Doing aprun -b -n 32 -N 16 -- map.sh $IMAGE_RUN_SCRIPT $NUM_DIV [...]"
-
 aprun -b -n 64 -N 32 -- map.sh $IMAGE_RUN_SCRIPT $NUM_DIV ${IMG_SYNSET_LIST[@]}
-
-echo "Done with images, Wrote data to ${IMG_DEST_DIR}"
+echo "Done with images, Wrote data to $IMG_DEST_DIR"
 echo "Starting Annotation extraction"
-
 echo "Creating Annotation Synset list"
-ANN_SYNSET_LIST=($(python -c "with open(\"${FILE_LIST}\") as f:
+ANN_SYNSET_LIST=($(python -c "with open(\"$FILE_LIST\") as f:
     for i in list(set([l.strip().split(' ')[0] for l in f])):
         print i"))
 echo "Finished Creating Annotatios Synset list"
 
 ANN_RUN_SCRIPT=extract_Annotations.sh
-
-cat <<EOF>$ANN_RUN_SCRIPT
+cat > $ANN_RUN_SCRIPT << EOF
+#!/bin/bash
 
 index=\$ALPS_APP_PE
 echo "\$index: starting $ANN_RUN_SCRIPT"
@@ -158,23 +114,19 @@ for syn in \$SYNSET_SLICE
 do
 
 XML_LIST=\$( python -c "import os
-with open(\"${FILE_LIST}\") as f:
-    for i in [os.path.join(\"Annotation\", *l.strip().split(\" \")) + '.xml' for l in f if \"\${syn}\" in l.split(\" \")[0]]:
+with open(\"$FILE_LIST\") as f:
+    for i in [os.path.join(\"Annotation\", *l.strip().split(\" \")) + '.xml' for l in f if \"\$syn\" in l.split(\" \")[0]]:
         print i" )
 
-echo "\${index}: starting tar -xzf $IMAGENET_ANNOTATION_TAR_ARCHIVE --to-stdout \${syn}.tar.gz | tar -xz -C ${ANN_DEST_DIR} \${XML_LIST}"
-tar -xzf $IMAGENET_ANNOTATION_TAR_ARCHIVE --to-stdout \${syn}.tar.gz | tar -xz -C ${ANN_DEST_DIR} \${XML_LIST}
+echo "\$index: starting tar -xzf $IMAGENET_ANNOTATION_TAR_ARCHIVE --to-stdout \$syn.tar.gz | tar -xz -C $ANN_DEST_DIR \$XML_LIST"
+tar -xzf $IMAGENET_ANNOTATION_TAR_ARCHIVE --to-stdout \$syn.tar.gz | tar -xz -C $ANN_DEST_DIR \${XML_LIST}
 
 done
-
 EOF
 
 chmod u=rwx $ANN_RUN_SCRIPT
-
 echo "Doing aprun -b -n 32 -N 16 -- map.sh $ANN_RUN_SCRIPT $NUM_DIV [...]"
-
 aprun -b -n 64 -N 32 -- map.sh $ANN_RUN_SCRIPT $NUM_DIV ${ANN_SYNSET_LIST[@]}
-
 echo "Done with annotations, Wrote data to ${ANN_DEST_DIR}"
 
 rm $ANN_RUN_SCRIPT

@@ -1,27 +1,20 @@
 #!/bin/bash
 cd $PBS_O_WORKDIR
 
-WORKER_HOSTS_TASKS=${1}
-shift
-PS_HOSTS_TASKS=${1}
-shift
-DATA_DIR=${1}
-shift
-TRAIN_DIR=${1}
-shift
+WORKER_HOSTS_TASKS=$1;
+PS_HOSTS_TASKS=$2;
+DATA_DIR=$3;
+TRAIN_DIR=$4;
+
+shift 4
 
 CMD_ARGS=${*}
-
 CMD_LOC="../benchmarks/scripts/tf_cnn_benchmarks/"
-
 MY_HOST_NAME=$(hostname)
-
 WORKER_HOSTS=""
 PS_HOSTS=""
-
 WHAT_AM_I=""
 MY_TASK_NUMBER=""
-
 WORKER_WAIT_TIME=20
 
 for h in $(echo $WORKER_HOSTS_TASKS | sed "s/,/ /g")
@@ -64,7 +57,7 @@ PY_CMD="${CMD_LOC}/tf_cnn_benchmarks.py \
 --task_index ${MY_TASK_NUMBER} \
 ${CMD_ARGS}"
 
-echo "I am ${MY_HOST_NAME}, my job is ${WHAT_AM_I} with task id ${MY_TASK_NUMBER}. Im about to run
+echo "Hi! I am ${MY_HOST_NAME}. My job is: ${WHAT_AM_I} with task id: ${MY_TASK_NUMBER}. I'm about to run
 python ${PY_CMD}"
 
 python $PY_CMD

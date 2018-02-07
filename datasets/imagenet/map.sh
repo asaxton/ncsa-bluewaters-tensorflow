@@ -1,22 +1,18 @@
 #!/bin/bash
 
-if [ -z "${1}" ]
-then
-echo "Usage <my_script.sh> <total num of nodes> [list of tokens]"
-exit 1
+if [[ -z "$1" ]]; then
+    echo "Usage: <script.sh> <total num of nodes> [list of tokens]"
+    exit 1
 fi
 
-MY_SCRIPT=${1}
-shift
-NUM_DIV=${1}
-shift
+MY_SCRIPT=$1; shift
+NUM_DIV=$1; shift
 
-if [ ! -z "$*" ]
-then
-TOT_LIST=($*)
+if [[ ! -z "$*" ]]; then 
+    TOT_LIST=($*)
 else
-read tmp
-TOT_LIST=($tmp)
+    read tmp
+    TOT_LIST=($tmp)
 fi
 
 let NUM_LIST=${#TOT_LIST[@]}
@@ -31,12 +27,12 @@ index=$ALPS_APP_PE
 
 if [ "$index" -ge "$step_remainder" ]
 then
-let exes=$index-$step_remainder
-let a=$step_block*$step_remainder+$step_remainder+$step_block*exes
-let b=$step_block
+    let exes=$index-$step_remainder
+    let a=$step_block*$step_remainder+$step_remainder+$step_block*$exes
+    let b=$step_block
 else
-let a=$step_block*$index+$index
-let b=$step_block+1
+    let a=$step_block*$index+$index
+    let b=$step_block+1
 fi
 
 LIST_SLICE="${TOT_LIST[@]:$a:$b}"

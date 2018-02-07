@@ -1,78 +1,46 @@
 #!/bin/bash
 
-### set the number of processing elements (PEs) or cores
-### set the number of PEs per node
 #PBS -l nodes=16:ppn=1:xk
-### set the wallclock time
 #PBS -l walltime=02:00:00
-### set the job name
 #PBS -N distributed_tf_launch
-### set the job stdout and stderr
 #PBS -e logs/log.${PBS_JOBNAME}_${PBS_JOBID}.err
 #PBS -o logs/log.${PBS_JOBNAME}_${PBS_JOBID}.out
-### set email notification
-##PBS -m bea
-##PBS -M nowhere@illinois.edu
-### In case of multiple allocations, select which one to charge
-##PBS -A xyz
 
-# NOTE: lines that begin with "#PBS" are not interpreted by the shell but ARE 
-# used by the batch system, wheras lines that begin with multiple # signs, 
-# like "##PBS" are considered "commented out" by the batch system 
-# and have no effect.  
+## For more options, consult https://bluewaters.ncsa.illinois.edu/batch-jobs
 
-# If you launched the job in a directory prepared for the job to run within, 
-# you'll want to cd to that directory
-# [uncomment the following line to enable this]
 cd $PBS_O_WORKDIR
-
-# Alternatively, the job script can create its own job-ID-unique directory 
-# to run within.  In that case you'll need to create and populate that 
-# directory with executables and perhaps inputs
-# [uncomment and customize the following lines to enable this behavior] 
-# mkdir -p /scratch/sciteam/$USER/$PBS_JOBID
-# cd /scratch/sciteam/$USER/$PBS_JOBID
-# cp /scratch/job/setup/directory/* .
-
-# To add certain modules that you do not have added via ~/.modules 
-#. /opt/modules/default/init/bash
-#module load craype-hugepages2M  perftools
-
-### launch the application
-### redirecting stdin and stdout if needed
-### NOTE: (the "in" file must exist for input)
 
 module load bwpy/0.3.1
 
 NUM_BATCHES=100
 DATA_DIR="${HOME}/scratch/ImageNet/tf_records"
-TRAIN_DIR="train_dir" # This directory is where the tf graph and checkpoint is saved
+TRAIN_DIR="train_dir" # Directory where TensorFlow saves graphs and checkpoints
 NUM_PS_HOSTS=1
 
-DO_TRAIN_VAL="--data_dir ${DATA_DIR}/train"
-#DO_TRAIN_VAL="--data_dir ${DATA_DIR}/validation --eval"
+DO_TRAIN_VAL="--data_dir $DATA_DIR/train"
+#DO_TRAIN_VAL="--data_dir $DATA_DIR/validation --eval"
 
-HOST_NAMES=$(aprun -q -n ${PBS_NUM_NODES} -N ${PBS_NUM_PPN} -- hostname)
+HOST_NAMES=$(aprun -q -n $PBS_NUM_NODES -N 1 -- hostname)
 let PS_HOST_COUNT=0
 let WORKER_HOST_COUNT=0
 
 PS_HOSTS_TASKS=""
 WORKER_HOSTS_TASKS=""
 
-for hn in $HOST_NAMES
+for host_name in $HOST_NAMES
 do
     if [ $PS_HOST_COUNT -lt $NUM_PS_HOSTS ]
     then
-	PS_HOSTS_TASKS="${hn}:$PS_HOST_COUNT,${PS_HOSTS_TASKS}" # , and : are delimiters
+	PS_HOSTS_TASKS="$host_name:$PS_HOST_COUNT,$PS_HOSTS_TASKS" # , and : are delimiters
 	let PS_HOST_COUNT++
     else
-	WORKER_HOSTS_TASKS="${hn}:${WORKER_HOST_COUNT},${WORKER_HOSTS_TASKS}" # , and : are delimiters
+	WORKER_HOSTS_TASKS="$host_name:$WORKER_HOST_COUNT,$WORKER_HOSTS_TASKS" # , and : are delimiters
 	let WORKER_HOST_COUNT++
     fi
 done
 
-WORKER_HOSTS_TASKS=$(echo $WORKER_HOSTS_TASKS | sed 's/,$//')
-PS_HOSTS_TASKS=$(echo $PS_HOSTS_TASKS | sed 's/,$//')
+WORKER_HOSTS_TASKS=$(sed 's|,$||' <<< $WORKER_HOSTS_TASKS)
+PS_HOSTS_TASKS=$(sed 's|,$||' <<< $PS_HOSTS_TASKS)
 
 RUN_CMD="${PBS_O_WORKDIR}/dist.sh"
 # parameter_server \
@@ -91,7 +59,7 @@ ADDITIONAL_ARGS="--batch_size 32 \
 --num_intra_threads 1 \
 --num_inter_threads 0"
 
-RUN_ARGUMENTS="${WORKER_HOSTS_TASKS} ${PS_HOSTS_TASKS} ${DATA_DIR} ${TRAIN_DIR} ${ADDITIONAL_ARGS} ${DO_TRAIN_VAL}" 
+RUN_ARGUMENTS="${WORKER_HOSTS_TASKS} ${PS_HOSTS_TASKS} ${DATA_DIR} ${TRAIN_DIR} ${ADDITIONAL_ARGS} ${DO_TRAIN_VAL}"
 
 echo "Running $RUN_CMD $RUN_ARGUMENTS"
 
@@ -99,5 +67,3 @@ aprun -b -n ${PBS_NUM_NODES} -N ${PBS_NUM_PPN} -- $RUN_CMD $RUN_ARGUMENTS \
     1> $PBS_O_WORKDIR/logs/${PBS_JOBNAME}_${PBS_JOBID}.out \
     2> $PBS_O_WORKDIR/logs/${PBS_JOBNAME}_${PBS_JOBID}.err
 echo "Done, thank you for flying."
-
-### For more information see the man page for aprun
