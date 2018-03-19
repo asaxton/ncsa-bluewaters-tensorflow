@@ -1,0 +1,85 @@
+#!/bin/bash
+
+### set the number of processing elements (PEs) or cores
+### set the number of PEs per node
+#PBS -l nodes=16:ppn=16:xk
+### set the wallclock time
+#PBS -l walltime=04:00:00
+### set the job name
+#PBS -N inception_imagenet_distributed_train
+### set the job stdout and stderr
+#PBS -e logs/log.${PBS_JOBNAME}_${PBS_JOBID}.err
+#PBS -o logs/log.${PBS_JOBNAME}_${PBS_JOBID}.out
+### set email notification
+##PBS -m bea
+##PBS -M nowhere@illinois.edu
+### In case of multiple allocations, select which one to charge
+##PBS -A xyz
+
+# NOTE: lines that begin with "#PBS" are not interpreted by the shell but ARE 
+# used by the batch system, wheras lines that begin with multiple # signs, 
+# like "##PBS" are considered "commented out" by the batch system 
+# and have no effect.  
+
+# If you launched the job in a directory prepared for the job to run within, 
+# you'll want to cd to that directory
+# [uncomment the following line to enable this]
+cd $PBS_O_WORKDIR
+
+# Alternatively, the job script can create its own job-ID-unique directory 
+# to run within.  In that case you'll need to create and populate that 
+# directory with executables and perhaps inputs
+# [uncomment and customize the following lines to enable this behavior] 
+# mkdir -p /scratch/sciteam/$USER/$PBS_JOBID
+# cd /scratch/sciteam/$USER/$PBS_JOBID
+# cp /scratch/job/setup/directory/* .
+
+# To add certain modules that you do not have added via ~/.modules 
+#. /opt/modules/default/init/bash
+#module load craype-hugepages2M  perftools
+
+### launch the application
+### redirecting stdin and stdout if needed
+### NOTE: (the "in" file must exist for input)
+
+#export CRAY_CUDA_MPS=1
+#export CUDA_VISIBLE_DEVICES=-1
+#export OMP_NUM_THREADS=4
+echo "Starting"
+module load bwpy/0.3.2
+module load bwpy-mpi
+
+NUM_STEPS=300000
+DATA_DIR="${HOME}/scratch/ImageNet/tf_records"
+
+BATCH_SIZE_PER_WORKER=16
+
+let NUM_NODES=${PBS_NUM_NODES}*2
+
+let BATCH_SIZE=${PBS_NUM_NODES}*${BATCH_SIZE_PER_WORKER}
+
+#NUM_NODES=$((${PBS_NUM_NODES}*2))
+
+#UNIQUE_CHECKPOINT_NAME="_$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 3 | head -n 1)"
+
+RUN_CMD="bwpy-environ -- \
+python-mpi ${PBS_O_WORKDIR}/../BWDistributedTrain/inception_imagenet_distributed_train.py \
+--data_dir $DATA_DIR/train \
+--num_steps $NUM_STEPS \
+--num_train_examples 385455 \
+--batch_size ${BATCH_SIZE} \
+--initial_learning_rate 0.01 \
+--checkpoint_dir checkpoint_dir${UNIQUE_CHECKPOINT_NAME}"
+# --server_protocol grpc+mpi \
+# --server_protocol grpc \
+
+mkdir -p logs
+
+echo "Running $RUN_CMD $RUN_ARGUMENTS"
+
+#rm -rf checkpoint_dir${UNIQUE_CHECKPOINT_NAME}
+aprun -b -cc none -n ${NUM_NODES} -N 2 -- $RUN_CMD \
+ 1> $PBS_O_WORKDIR/logs/log.${PBS_JOBNAME}_${PBS_JOBID}.std_out \
+ 2> $PBS_O_WORKDIR/logs/log.${PBS_JOBNAME}_${PBS_JOBID}.std_err
+echo "Done, Thank you for flying."
+#rm -rf checkpoint_dir${UNIQUE_CHECKPOINT_NAME}
