@@ -80,7 +80,7 @@ echo "DEST_DIR=$DEST_DIR"
 
 echo "FILE_LIST=$FILE_LIST"
 
-module load bwpy/0.3.1
+module load bwpy/0.3.2
 
 # make sure you qsub this script from the same directoy
 # that build_imagenet_data.pbs is in.

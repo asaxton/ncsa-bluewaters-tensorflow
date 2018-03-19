@@ -99,3 +99,13 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# Generic python
+*.pyc
+
+# emacs
+*~
+
+# project specific ignore
+checkpoint_dir*
+tmp_bbox_stash_index*
