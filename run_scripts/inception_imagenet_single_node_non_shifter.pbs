@@ -1,0 +1,72 @@
+#!/bin/bash
+#PBS -l nodes=1:ppn=16:xk
+#PBS -l walltime=00:20:00
+#PBS -N inception_imagenet_single_node_non_shifter
+#PBS -e logs/log.${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_${PBS_JOBID}.err
+#PBS -o logs/log.${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_${PBS_JOBID}.out
+
+# NOTE: lines that begin with "#PBS" are not interpreted by the shell but ARE 
+# used by the batch system, wheras lines that begin with multiple # signs, 
+# like "##PBS" are considered "commented out" by the batch system 
+# and have no effect.  
+
+# If you launched the job in a directory prepared for the job to run within, 
+# you'll want to cd to that directory
+# [uncomment the following line to enable this]
+cd $PBS_O_WORKDIR
+
+# Alternatively, the job script can create its own job-ID-unique directory 
+# to run within.  In that case you'll need to create and populate that 
+# directory with executables and perhaps inputs
+# [uncomment and customize the following lines to enable this behavior] 
+# mkdir -p /scratch/sciteam/$USER/$PBS_JOBID
+# cd /scratch/sciteam/$USER/$PBS_JOBID
+# cp /scratch/job/setup/directory/* .
+
+# To add certain modules that you do not have added via ~/.modules 
+#. /opt/modules/default/init/bash
+#module load craype-hugepages2M  perftools
+
+### launch the application
+### redirecting stdin and stdout if needed
+### NOTE: (the "in" file must exist for input)
+
+#export CRAY_CUDA_MPS=1
+#export CUDA_VISIBLE_DEVICES=-1
+#export OMP_NUM_THREADS=4
+echo "Starting"
+module load bwpy
+module load bwpy-mpi
+export BWPY_VERSION=1.1.1-rc2-20180413
+PROJ_DIR='/mnt/a/u/staff/saxton/Development/bw_tf_dev_0.0.1/ncsa-bluewaters-tensorflow'
+WORK_DIR='/mnt/b/projects/sciteam/banw/tensorflow'
+
+DATA_DIR="/mnt/c/scratch/staff/saxton/ImageNet2/tf_records/train" #"${HOME}/scratch/ImageNet2/tf_records"
+BATCH_SIZE=32
+NUM_STEPS=3000000
+#UNIQUE_CHECKPOINT_NAME="_$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 3 | head -n 1)"
+
+RUN_CMD="python ../BWDistributedTrain/inception_imagenet_single_node.py \
+--data_dir ${DATA_DIR} \
+--num_steps $NUM_STEPS \
+--num_train_examples 385455 \
+--batch_size ${BATCH_SIZE} \
+--initial_learning_rate 0.1 \
+--checkpoint_dir ./checkpoint_dir_${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_NPS_${NUM_CPU}_NW_${NUM_GPU}_BSPW_${BATCH_SIZE_PER_WORKER}_BS_${BATCH_SIZE}_JID_${PBS_JOBID}"
+#--volume $PBS_O_WORKDIR/..:/work
+
+aprun -cc none -n 1 -N1 -b -- ${RUN_CMD}
+#aprun -b -cc none -n 1 -N 1 -- ${RUN_CMD}
+#aprun -n1 -d16 -N1 -b -- shifter \
+#--image=rhaas/tensorflow:16.04e \
+#--volume ${WORK_DIR}:/work \
+#--volume /dsl/opt/cray/:/opt/cray \
+#--volume /dsl/opt/gcc:/opt/gcc \
+#--volume /dsl/opt/nvidia:/opt/nvidia \
+#--volume ${PROJ_DIR}:/Proj \
+#--volume ${DATA_DIR}:/data_dir \
+#--volume ${PROJ_DIR}:/checkpoints \
+#-- /Proj/run_scripts/do_me.sh #$RUN_CMD 
+
+echo "Done, Thank you for flying."
+#rm -rf checkpoint_dir${UNIQUE_CHECKPOINT_NAME}

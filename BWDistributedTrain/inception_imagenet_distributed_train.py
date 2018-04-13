@@ -11,6 +11,8 @@ from itertools import chain
 path_to_inception = os.path.join(*[os.path.dirname(os.path.abspath(__file__)),
                                    '..', 'models', 'research', 'inception'])
 sys.path.append(path_to_inception)
+print(os.listdir(path_to_inception))
+print(os.path.dirname(os.path.abspath(__file__)))
 
 # Constants dictating the learning rate schedule.
 RMSPROP_DECAY = 0.9                # Decay term for RMSProp.
@@ -73,9 +75,15 @@ def inception_imagenet_distributed_train():
     host_rank_dict = {k: [i[0] for i in g]
                       for k, g in groupby(sorted(enumerate(hostnames), key = lambda y: y[1]),
                                           key = lambda x: x[1])}
-
-    ps_ranks, worker_ranks =  zip(*host_rank_dict.values())[:2]
-    unique_hostnames = host_rank_dict.keys()
+    host_rank_dict_values = list(host_rank_dict.values())
+    print("host_rank_dict_values %s" % str(host_rank_dict_values))
+    if len(host_rank_dict_values) < 2:
+      ps_ranks, worker_ranks = host_rank_dict_values[0][:2]
+      ps_ranks = [ps_ranks]
+      worker_ranks = [worker_ranks]
+    else:
+      ps_ranks, worker_ranks =  list(zip(*host_rank_dict_values))[:2]
+    unique_hostnames = list(host_rank_dict.keys())
 
     NUM_PS = len(unique_hostnames)
 
@@ -149,7 +157,7 @@ def inception_imagenet_distributed_train():
     return
 
 
-  print 'Running worker %s: on host %s with mpi rank %d' % (tf_index, my_hostname, rank)
+  print('Running worker %s: on host %s with mpi rank %d' % (tf_index, my_hostname, rank))
   with tf.Graph().as_default():
 
     print('worker %s: Building: Graph' % tf_index)
@@ -227,6 +235,7 @@ def inception_imagenet_distributed_train():
     benchmark_loss_list = []
     step_count = 0
     print('worker %s: Entering MonitoredTrainingSession()' % tf_index)
+      
     with tf.train.MonitoredTrainingSession(master=server.target,
                                            is_chief=(tf_index == 0),
                                            checkpoint_dir=FLAGS.checkpoint_dir,

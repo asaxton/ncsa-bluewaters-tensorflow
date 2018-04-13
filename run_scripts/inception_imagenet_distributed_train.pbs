@@ -2,9 +2,9 @@
 
 ### set the number of processing elements (PEs) or cores
 ### set the number of PEs per node
-#PBS -l nodes=16:ppn=16:xk
+##PBS -l nodes=16:ppn=32:xe+64:ppn=16:xk
 ### set the wallclock time
-#PBS -l walltime=04:00:00
+#PBS -l walltime=00:20:00
 ### set the job name
 #PBS -N inception_imagenet_distributed_train
 ### set the job stdout and stderr
@@ -46,19 +46,17 @@ cd $PBS_O_WORKDIR
 #export CUDA_VISIBLE_DEVICES=-1
 #export OMP_NUM_THREADS=4
 echo "Starting"
+
+NUM_GPU=$(aprun -n ${PBS_NUM_NODES} -N 1 -- /sbin/lspci | grep NVIDIA | wc -l)
+let NUM_CPU=${PBS_NUM_NODES}-${NUM_GPU}
+echo "NUM_GPU ${NUM_GPU}, NUM_CPU ${NUM_CPU}"
 module load bwpy/0.3.2
 module load bwpy-mpi
 
 NUM_STEPS=300000
-DATA_DIR="${HOME}/scratch/ImageNet/tf_records"
+DATA_DIR="${HOME}/scratch/ImageNet2/tf_records"
 
-BATCH_SIZE_PER_WORKER=16
-
-let NUM_NODES=${PBS_NUM_NODES}*2
-
-let BATCH_SIZE=${PBS_NUM_NODES}*${BATCH_SIZE_PER_WORKER}
-
-#NUM_NODES=$((${PBS_NUM_NODES}*2))
+BATCH_SIZE=32
 
 #UNIQUE_CHECKPOINT_NAME="_$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 3 | head -n 1)"
 
@@ -68,8 +66,8 @@ python-mpi ${PBS_O_WORKDIR}/../BWDistributedTrain/inception_imagenet_distributed
 --num_steps $NUM_STEPS \
 --num_train_examples 385455 \
 --batch_size ${BATCH_SIZE} \
---initial_learning_rate 0.01 \
---checkpoint_dir checkpoint_dir${UNIQUE_CHECKPOINT_NAME}"
+--initial_learning_rate 0.1 \
+--checkpoint_dir checkpoint_dir_${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_NPS_${NUM_CPU}_NW_${NUM_GPU}_BSPW_${BATCH_SIZE_PER_WORKER}_BS_${BATCH_SIZE}_JID_${PBS_JOBID}"
 # --server_protocol grpc+mpi \
 # --server_protocol grpc \
 
@@ -78,8 +76,9 @@ mkdir -p logs
 echo "Running $RUN_CMD $RUN_ARGUMENTS"
 
 #rm -rf checkpoint_dir${UNIQUE_CHECKPOINT_NAME}
-aprun -b -cc none -n ${NUM_NODES} -N 2 -- $RUN_CMD \
- 1> $PBS_O_WORKDIR/logs/log.${PBS_JOBNAME}_${PBS_JOBID}.std_out \
- 2> $PBS_O_WORKDIR/logs/log.${PBS_JOBNAME}_${PBS_JOBID}.std_err
+aprun -b -cc none -n ${NUM_CPU} -N 1 $RUN_CMD --ps_worker ps : -n ${NUM_GPU} -N 1 $RUN_CMD --ps_worker worker \
+ 1> $PBS_O_WORKDIR/logs/log.${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_NPS_${NUM_CPU}_NW_${NUM_GPU}_BSPW_${BATCH_SIZE_PER_WORKER}_BS_${BATCH_SIZE}_JID_${PBS_JOBID}.std_out \
+ 2> $PBS_O_WORKDIR/logs/log.${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_NPS_${NUM_CPU}_NW_${NUM_GPU}_BSPW_${BATCH_SIZE_PER_WORKER}_BS_${BATCH_SIZE}_JID_${PBS_JOBID}.std_err \
+
 echo "Done, Thank you for flying."
 #rm -rf checkpoint_dir${UNIQUE_CHECKPOINT_NAME}
