@@ -9,17 +9,23 @@ import random
 from itertools import groupby
 from itertools import chain
 print('Loading2')
+
+path_to_resnet = os.path.join(*[os.path.dirname(os.path.abspath(__file__)),
+                                   '..', 'models', 'research', 'slim'])
+sys.path.append(path_to_resnet)
+
 path_to_inception = os.path.join(*[os.path.dirname(os.path.abspath(__file__)),
                                    '..', 'models', 'research', 'inception'])
 sys.path.append(path_to_inception)
+
 print(os.listdir(path_to_inception))
 print(os.path.dirname(os.path.abspath(__file__)))
 print('Loading3')
 import tensorflow as tf
 from tensorflow.python.ops import data_flow_ops
 from inception.imagenet_data import ImagenetData
-from inception import inception_model as inception
 from inception.image_processing import batch_inputs
+import nets.alexnet as alexnet
 print('Loading4')
 tf.flags.DEFINE_string('checkpoint_dir', 'checkpoint_dir', 'the directory to sore training check poinrts.')
 tf.flags.DEFINE_string('ps_worker', 'ps', 'Parameter server or worker')
@@ -28,7 +34,6 @@ tf.flags.DEFINE_integer('num_steps', 1, 'number of forward + back propigation st
 tf.flags.DEFINE_integer('num_classes', 1000, 'Number of syssets in dataset')
 tf.flags.DEFINE_string('server_protocol', 'grpc', 'protocol for servers')
 tf.flags.DEFINE_string('model', 'inception_v3', '')
-tf.app.flags.DEFINE_boolean('restore', False, 'restores a checkpoint and saves a usable saved graph')
 'grpc+mpi'
 tf.flags.DEFINE_float('initial_learning_rate', 0.4, 'RMS with exp decay learning rate')
 tf.app.flags.DEFINE_float('num_epochs_per_decay', 30.0,
@@ -36,6 +41,8 @@ tf.app.flags.DEFINE_float('num_epochs_per_decay', 30.0,
 tf.app.flags.DEFINE_float('learning_rate_decay_factor', 2.71,
                           """Learning rate decay factor.""")
 FLAGS = tf.flags.FLAGS
+
+_LABEL_CLASSES = 1001
 
 # Constants dictating the learning rate schedule.
 RMSPROP_DECAY = 0.9                # Decay term for RMSProp.
@@ -165,7 +172,7 @@ def inception_imagenet_distributed_train():
       images_splits = tf.split(axis=0, num_or_size_splits=num_workers, value=images)
       labels_splits = tf.split(axis=0, num_or_size_splits=num_workers, value=labels)
       print("worker %s: Building: Step 3" % tf_index)
-
+      
       global_step = tf.train.get_or_create_global_step() #tf.contrib.framework.get_or_create_global_step()
 
       print("worker %s: Building: Step 3" % tf_index)
@@ -191,50 +198,33 @@ def inception_imagenet_distributed_train():
       # logit is the number of classes in specified Dataset.
 
       # Build inference Graph.
-      with tf.variable_scope('Inception_Inference') as variable_scope:
+      with tf.name_scope('Inception_Inference') as name_scope:
         print("worker %s: Building: Step 4" % tf_index)
-        logits = inception.inference(
-              images_splits[tf_index],
-              FLAGS.num_classes,
-              for_training=True,
-              restore_logits=False,
-              )
-      with tf.variable_scope('Inception_Loss') as variable_scope:
+        logits, _ = alexnet.alexnet_v2(inputs=images_splits[tf_index])
+
+      with tf.name_scope('Inception_Loss') as name_scope:
           split_batch_size = images_splits[tf_index].get_shape().as_list()[0]
 
           num_classes = logits[0].get_shape()[-1].value
 
           onehot_labels = tf.one_hot(tf.cast(labels_splits[tf_index], tf.int32), depth=num_classes)
 
-          with tf.variable_scope('xentropy'):
+          with tf.name_scope('xentropy'):
             print("worker %s: Building: Step 5" % tf_index)
             cross_entropy = tf.losses.softmax_cross_entropy(
-              logits=logits[0], onehot_labels=onehot_labels,
-              label_smoothing=.5) #, reduction=tf.losses.Reduction.SUM)
+              logits=logits, onehot_labels=onehot_labels,
+              label_smoothing=.5, reduction=tf.losses.Reduction.SUM)
             loss = tf.reduce_mean(cross_entropy, name='xentropy_mean')
 
-          with tf.variable_scope('aux_xentropy'):
-            print("worker %s: Building: Step 6" % tf_index)
-            aux_cross_entropy = tf.losses.softmax_cross_entropy(
-              logits=logits[1], onehot_labels=onehot_labels,
-              label_smoothing=.5, reduction=tf.losses.Reduction.SUM)
-            aux_loss = 0.3 * tf.reduce_mean(aux_cross_entropy, name='aux_loss')
-
-          #regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-          regularization_losses = []
-          total_loss = tf.add_n([loss, aux_loss] + regularization_losses, name='total_loss')
 
       print("worker %s: Building: Step 7" % tf_index)
-      with tf.variable_scope('Optimizer'):
-        grads_and_vars = optimizer.compute_gradients(total_loss)
+      with tf.name_scope('Optimizer'):
+        grads_and_vars = optimizer.compute_gradients(loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
     #minimize_opt = optimizer.minimize(total_loss, global_step=global_step)
-    if FLAGS.restore:
-      print('Restoring checkpoint, saving a final model, then exiting')
-      hooks = [SaveAtEnd(), tf.train.StopAtStepHook(last_step=0)]
-    else:
-      hooks = [SaveAtEnd(), tf.train.StopAtStepHook(last_step=FLAGS.num_steps)]
+
+    hooks = [tf.train.StopAtStepHook(last_step=FLAGS.num_steps)]
 
     config = tf.ConfigProto(
       allow_soft_placement=True,
@@ -243,9 +233,8 @@ def inception_imagenet_distributed_train():
     benchmark_delta_list = []
     benchmark_loss_list = []
     step_count = 0
-
     print('worker %s: Entering MonitoredTrainingSession()' % tf_index)
-
+      
     with tf.train.MonitoredTrainingSession(master=server.target,
                                            is_chief=(tf_index == 0),
                                            checkpoint_dir=FLAGS.checkpoint_dir,
@@ -263,9 +252,9 @@ def inception_imagenet_distributed_train():
         tick = dt.now()
         #if step_count % PRINT_SUMMERY_EVERY == 0:
         if True:
-          _, l, g_s = mon_sess.run((train_op, total_loss, global_step))
+          _, l, g_s = mon_sess.run((train_op, loss, global_step))
         else:
-          _, l, = mon_sess.run((train_op, total_loss))
+          _, l, = mon_sess.run((train_op, loss))
         tock = dt.now()
 
         benchmark_delta_list.append(float((tock - tick).total_seconds()))
@@ -279,17 +268,9 @@ def inception_imagenet_distributed_train():
           benchmark_loss_list = []
 
     print("worker %s: Finished In MonitoredTrainingSession(): Final loss, %s" % (tf_index, l))
+
   comm.barrier()
 
-class SaveAtEnd(tf.train.SessionRunHook):
-  def begin(self):
-    inception_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                       scope='Inception_Inference')
-    print('Saving Model Variables. Number of Vars: {}'.format(len(inception_vars)))
-    self._saver = tf.train.Saver(inception_vars, save_relative_paths=True)
-  def end(self, session):
-
-    self._saver.save(session, os.path.join(FLAGS.checkpoint_dir, 'final_save'))
 
 if __name__ == "__main__":
     inception_imagenet_distributed_train()    
