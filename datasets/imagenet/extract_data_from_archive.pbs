@@ -46,7 +46,7 @@ IMAGENET_ANNOTATION_TAR_ARCHIVE=/sw/unsupported/mldata/ImageNet/Annotation.tar.g
 
 # keep debuging, training, validation, and  testing data in differnt dir
 # choose which you are doing here
-MODE=training
+MODE=train
 #MODE=validation
 FILE_LIST=$PBS_O_WORKDIR/${MODE}_files.txt
 

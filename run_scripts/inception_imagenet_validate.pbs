@@ -1,0 +1,36 @@
+#!/bin/bash
+##PBS -l nodes=16:ppn=32:xe+64:ppn=16:xk
+##PBS -l nodes=8:ppn=16:xk
+#PBS -l walltime=10:00:00
+#PBS -N cug_2018_inception_imagenet_distributed_train_MBS_32
+#PBS -e logs/log.${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_${PBS_JOBID}.err
+#PBS -o logs/log.${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_${PBS_JOBID}.out
+
+echo "Starting"
+cd $PBS_O_WORKDIR
+mkdir -p logs
+
+module load bwpy
+module load bwpy-mpi
+
+DATA_DIR="${HOME}/scratch/ImageNet/tf_records"
+
+#UNIQUE_CHECKPOINT_NAME="_$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 3 | head -n 1)"
+
+echo "output at ${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_MBS_${MBS}_NGPU_${NUM_GPU}_${PBS_JOBID}.*"
+
+CHECKPOINT_DIR="checkpoint_dir_STDIN_NN_8_BS__8682159.bw"
+
+RUN_CMD="python ${PBS_O_WORKDIR}/../BWDistributedTrain/inception_imagenet_validate.py \
+--data_dir $DATA_DIR/train \
+--batch_size 1 \
+--num_steps $NUM_STEPS \
+--num_train_examples 50000 \
+--checkpoint_dir ${CHECKPOINT_DIR}"
+echo "Running Comand"
+echo ${RUN_CMD}
+aprun -b -cc none -n 1 -N 1 $RUN_CMD
+#1> ${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_NGPU_${NUM_GPU}_${PBS_JOBID}.out \
+#2> ${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_NGPU_${NUM_GPU}_${PBS_JOBID}.err
+
+echo "Done, Thank you for flying."
