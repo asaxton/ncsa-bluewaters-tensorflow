@@ -6,7 +6,18 @@
 #PBS -e logs/log.${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_${PBS_JOBID}.err
 #PBS -o logs/log.${PBS_JOBNAME}_NN_${PBS_NUM_NODES}_${PBS_JOBID}.out
 
+PREVIOUS_JOBNAME=""
+PREVIOUS_JOBID=""
+
 echo "Starting"
+
+if [ -z "${PREVIOUS_JOBNAME}" ] || [ -z "${PREVIOUS_JOBID}" ];
+then
+echo "Please set the enviromeent variables PREVIOUS_JOBNAME and PREVIOUS_JOBID above then rerun this script"
+echo "Exiting"
+exit 1
+fi
+
 cd $PBS_O_WORKDIR
 mkdir -p logs
 
@@ -17,20 +28,22 @@ DATA_DIR="${HOME}/scratch/ImageNet/tf_records"
 
 #UNIQUE_CHECKPOINT_NAME="_$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 3 | head -n 1)"
 
-echo "output at ${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_MBS_${MBS}_NGPU_${NUM_GPU}_${PBS_JOBID}.*"
+APOUT_LOGS="${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_${PBS_JOBID}"
+echo "output at ${APOUT_LOGS}.*"
+CHECKPT_DIR="checkpoint_dir_${PREVIOUS_JOBNAME}_${PREVIOUS_JOBID}.bw"
+echo "restoring checkpoint ${CHECKPT_DIR}"
 
-CHECKPOINT_DIR="checkpoint_dir_STDIN_NN_8_BS__8682159.bw"
 
 RUN_CMD="python ${PBS_O_WORKDIR}/../BWDistributedTrain/inception_imagenet_validate.py \
---data_dir $DATA_DIR/train \
+--data_dir $DATA_DIR/validation \
 --batch_size 1 \
 --num_steps $NUM_STEPS \
 --num_train_examples 50000 \
---checkpoint_dir ${CHECKPOINT_DIR}"
+--checkpoint_dir ${CHECKPT_DIR}"
 echo "Running Comand"
 echo ${RUN_CMD}
-aprun -b -cc none -n 1 -N 1 $RUN_CMD
-#1> ${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_NGPU_${NUM_GPU}_${PBS_JOBID}.out \
-#2> ${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_NGPU_${NUM_GPU}_${PBS_JOBID}.err
+aprun -b -cc none -n 1 -N 1 $RUN_CMD \
+1> ${PBS_O_WORKDIR}/logs/${APOUT_LOGS}.out \
+2> ${PBS_O_WORKDIR}/logs/${APOUT_LOGS}.err
 
 echo "Done, Thank you for flying."

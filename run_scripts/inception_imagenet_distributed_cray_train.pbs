@@ -13,8 +13,6 @@ mkdir -p ${PBS_O_WORKDIR}/logs
 export MODULEPATH="/sw/bw/bwpy/modulefiles/:${MODULEPATH}"
 
 module load bwpy
-#export BWPY_VERSION=1.1.1-rc2-20180413
-#export BWPY_VERSION=1.1.1-rc0-20180410
 module load craype-ml-plugin-py3/1.1.0
 
 #module load bwpy-mpi
@@ -30,7 +28,7 @@ DATA_DIR="${HOME}/scratch/ImageNet/tf_records/"
 MBS=32
 
 CHECKPT_DIR="checkpoint_dir_${PBS_JOBNAME}_${PBS_JOBID}"
-APOUT_LOGS="${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_NW_${NUM_WORKER}_MBS_${MBS}_${PBS_JOBID}"
+APOUT_LOGS="${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_MBS_${MBS}_${PBS_JOBID}"
 
 echo "output at ${APOUT_LOGS}.*"
 echo "checkpoint_dir at ${CHECKPT_DIR}"
@@ -38,7 +36,7 @@ echo "checkpoint_dir at ${CHECKPT_DIR}"
 NUM_EPOCHS=2
 NUM_TRAINING_EXAMPLES=385455
 NUM_STEPS=$(echo "${NUM_TRAINING_EXAMPLES}*${NUM_EPOCHS} / ( ${PBS_NUM_NODES} * ${MBS} )" | bc )
-NUM_STEPS=300 # use for debugin
+NUM_STEPS=300 # use for debuging
 
 LEARNING_RATE=$(echo "0.4 * sqrt(${PBS_NUM_NODES})" | bc)
 echo "Learning Rate: ${LEARNING_RATE}"
@@ -55,6 +53,6 @@ RUN_CMD="python ${PBS_O_WORKDIR}/../BWDistributedTrain/inception_imagenet_distri
 echo "aprun with MBS ${MBS}"
 echo "output at ${APOUT_LOGS}.*"
 
-aprun -cc none -n ${PBS_NUM_NODES} -d 16 -N 1 -b -- ${RUN_CMD} #\
-#1> ${APOUT_LOGS}.out \
-#2> ${APOUT_LOGS}.err
+aprun -cc none -n ${PBS_NUM_NODES} -d 16 -N 1 -b -- ${RUN_CMD} \
+1> ${APOUT_LOGS}.out \
+2> ${APOUT_LOGS}.err

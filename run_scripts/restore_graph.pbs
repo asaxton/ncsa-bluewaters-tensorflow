@@ -40,7 +40,7 @@ DATA_DIR="${HOME}/scratch/ImageNet/tf_records"
 
 APOUT_LOGS="${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_${PBS_JOBID}"
 echo "output at ${APOUT_LOGS}.*"
-CHECKPT_DIR="checkpoint_dir_${PBS_JOBNAME}_${PBS_JOBID}"
+CHECKPT_DIR="checkpoint_dir_${PREVIOUS_JOBNAME}_${PREVIOUS_JOBID}.bw"
 echo "restoring checkpoint ${CHECKPT_DIR}"
 
 RUN_CMD="python ${PBS_O_WORKDIR}/../BWDistributedTrain/inception_imagenet_distributed_train.py \
@@ -52,7 +52,7 @@ RUN_CMD="python ${PBS_O_WORKDIR}/../BWDistributedTrain/inception_imagenet_distri
 echo "Running Comand"
 echo ${RUN_CMD}
 aprun -b -cc none -n ${NUM_PS} -N 1 $RUN_CMD --ps_worker ps : -n ${NUM_WORKER} -N 1 $RUN_CMD --ps_worker worker \
-1> ${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_NGPU_${NUM_GPU}_${PBS_JOBID}.out \
-2> ${PBS_O_WORKDIR}/logs/apout.${PBS_JOBNAME}_NGPU_${NUM_GPU}_${PBS_JOBID}.err
+1> ${PBS_O_WORKDIR}/logs/${APOUT_LOGS}.out \
+2> ${PBS_O_WORKDIR}/logs/${APOUT_LOGS}.err
 
 echo "Done, Thank you for flying."
