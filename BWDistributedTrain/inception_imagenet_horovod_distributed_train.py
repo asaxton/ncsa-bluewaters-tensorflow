@@ -80,26 +80,26 @@ def inception_imagenet_distributed_train():
             num_preprocess_threads=FLAGS.num_preprocess_threads,
             num_readers=FLAGS.num_readers)
 
-      print("worker %s: Building: Step 2" % rank)
-      images_splits = tf.split(axis=0, num_or_size_splits=num_workers, value=images)
-      labels_splits = tf.split(axis=0, num_or_size_splits=num_workers, value=labels)
+          print("worker %s: Building: Step 2" % rank)
+          images_splits = tf.split(axis=0, num_or_size_splits=num_workers, value=images)
+          labels_splits = tf.split(axis=0, num_or_size_splits=num_workers, value=labels)
       print("worker %s: Building: Step 3" % rank)
       global_step = tf.contrib.framework.get_or_create_global_step()
 
       print("worker %s: Building: Step 4" % rank)
-      #optimizer = tf.train.AdagradOptimizer(0.01)
+      #optimizer = tf.train.AdagradOptimizer(FLAGS.initial_learning_rate)
 
-      #lr = tf.train.exponential_decay(FLAGS.initial_learning_rate,
-      #                                global_step,
-      #                                2,
-      #                                FLAGS.learning_rate_decay_factor,
-      #                                staircase=True)
+      lr = tf.train.exponential_decay(FLAGS.initial_learning_rate,
+                                      global_step,
+                                      2,
+                                      FLAGS.learning_rate_decay_factor,
+                                      staircase=True)
       lr = FLAGS.initial_learning_rate
-      #optimizer = tf.train.GradientDescentOptimizer(lr)
+      optimizer = tf.train.GradientDescentOptimizer(lr)
       
-      optimizer = tf.train.RMSPropOptimizer(lr, RMSPROP_DECAY,
-                                      momentum=RMSPROP_MOMENTUM,
-                                      epsilon=RMSPROP_EPSILON)
+      #optimizer = tf.train.RMSPropOptimizer(lr, RMSPROP_DECAY,
+      #                                momentum=RMSPROP_MOMENTUM,
+      #                                epsilon=RMSPROP_EPSILON)
       optimizer = hvd.DistributedOptimizer(optimizer, device_sparse='/cpu:0')
 
       # When fine-tuning a model, we do not restore the logits but instead we
@@ -109,12 +109,23 @@ def inception_imagenet_distributed_train():
       # Build inference Graph.
       with tf.name_scope('Inception_Inference') as name_scope:
         print("worker %s: Building: Step 5" % rank)
-        logits = inception.inference(
-              images_splits[rank],
-              FLAGS.num_classes,
-              for_training=True,
-              restore_logits=False,
-              )
+        try:
+          logits = inception.inference(
+            images_splits[rank],
+            FLAGS.num_classes,
+            for_training=True,
+            restore_logits=False,
+            build_summeries=False
+            )
+        except TypeError:
+          print('accepted TypeError, building model with summeries')
+          logits = inception.inference(
+            images_splits[rank],
+            FLAGS.num_classes,
+            for_training=True,
+            restore_logits=False,
+            )
+          
       with tf.name_scope('Inception_Loss') as name_scope:
           split_batch_size = images_splits[rank].get_shape().as_list()[0]
           print('worker %s: split_batch_size %s' % (rank,split_batch_size))
